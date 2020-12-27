@@ -66,8 +66,12 @@ CHIP ALU {
 
     // NO: (if no=1) out=!out or (if no=0)
     Not16(in=out1, out=notout);
-    Mux16(a=out1, b=notout, sel=no, out=out2); // if (sel)no=0, then a(out1),
+    Mux16(a=out1, b=notout, sel=no, out=out, out=out2); // if (sel)no=0, then a(out1),
                                                // if (sel)no=1, then b(notout)
+
+    /*got help from: http://nand2tetris-questions-and-answers-forum.32033.n3.nabble.com/ALU-Can-t-connect-gate-s-output-pin-to-part-td4026625.html
+    regarding Error: "Can't connect gate's output pin to part"
+    */
 
     // ZR: *first deduce all out=0 bits by Or16Way(create extra chip)
     Or16Way(in=out2, out=outzero); // (if all bits 0) then return 0, otherwise 1
@@ -75,8 +79,7 @@ CHIP ALU {
                                                // if (sel)out!=0, then b(zr=0(false))
 
     // NG: *use AND - (if most significant digit=1(true)) return 1(true)
-    And(a=out2[15], b=true, out=neg);
+    Neg16(in=out2, out=neg);
     Mux(a=false, b=true, sel=neg, out=ng); // if (sel)out==0, then a(zr=1(true)),
-                                           // if (sel)out!=0, then b(zr=0(false))
-    Or16(a=out2, b=false, out=out);
+                                           // if (sel)out!=0, then b(zr=0(false)
 }

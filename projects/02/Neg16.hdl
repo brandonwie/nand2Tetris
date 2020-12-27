@@ -1,0 +1,13 @@
+/**
+Created for personal use
+due to "sub bus of an internal node may not be used
+" error
+*/
+
+CHIP Neg16 {
+  IN in[16];
+  OUT out;
+
+  PARTS:
+  And(a=in[15], b=true, out=out);
+}
