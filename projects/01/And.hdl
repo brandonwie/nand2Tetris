@@ -16,5 +16,13 @@ CHIP And {
     PARTS:
     // Put your code here:
     Nand(a=a, b=b, out=anandb);
-    Not (in=anandb, out=out);
+    /* NAND
+    | a | b |out|
+    | 0 | 0 | 1 |
+    | 0 | 1 | 1 |
+    | 1 | 0 | 1 |
+    | 1 | 1 | 0 |
+    */
+    // NOT(NOT(A AND B)) = A AND B
+    Not (in=anandb, out=out); // NOT(NAND) = AND
 }

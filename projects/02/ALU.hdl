@@ -7,7 +7,7 @@
  * The ALU (Arithmetic Logic Unit).
  * Computes one of the following functions:
  * x+y, x-y, y-x, 0, 1, -1, x, y, -x, -y, !x, !y,
- * x+1, y+1, x-1, y-1, x&y, x|y on two 16-bit inputs, 
+ * x+1, y+1, x-1, y-1, x&y, x|y on two 16-bit inputs,
  * according to 6 input bits denoted zx,nx,zy,ny,f,no.
  * In addition, the ALU computes two 1-bit outputs:
  * if the ALU output == 0, zr is set to 1; otherwise zr is set to 0;
@@ -27,8 +27,8 @@
 // if (out < 0) set ng = 1
 
 CHIP ALU {
-    IN  
-        x[16], y[16],  // 16-bit inputs        
+    IN
+        x[16], y[16],  // 16-bit inputs
         zx, // zero the x input?
         nx, // negate the x input?
         zy, // zero the y input?
@@ -36,11 +36,47 @@ CHIP ALU {
         f,  // compute out = x + y (if 1) or x & y (if 0)
         no; // negate the out output?
 
-    OUT 
+    OUT
         out[16], // 16-bit output
         zr, // 1 if (out == 0), 0 otherwise
         ng; // 1 if (out < 0),  0 otherwise
 
     PARTS:
-   // Put you code here:
+    // Put you code here:
+
+    // ZX: if zx=1 then x=0 (Mux)
+    Mux16(a=x, b=false, sel=zx, out=x1);
+
+    // NX: if nx=1 then x=!x (Mux)
+    Not16(in=x1, out=notx1); //to get !x
+    Mux16(a=x1, b=notx1, sel=nx, out=x2);
+
+    // ZY: if zy=1 then y=0 (Mux)
+    Mux16(a=y, b=false, sel=zy, out=y1);
+
+    // NY: if ny=1 then y=!y (Mux)
+    Not16(in=y1, out=noty1); // to get !y
+    Mux16(a=y1, b=noty1, sel=ny, out=y2);
+
+    // F: (if f=1) x+y or (if f=0) x&y
+    Add16(a=x2, b=y2, out=sum); // x+y
+    And16(a=x2, b=y2, out=and); // x&y
+    Mux16(a=and, b=sum, sel=f, out=out1); // if (sel)f=0, then a(and),
+                                          // if (sel)f=1, then b(sum)
+
+    // NO: (if no=1) out=!out or (if no=0)
+    Not16(in=out1, out=notout);
+    Mux16(a=out1, b=notout, sel=no, out=out2); // if (sel)no=0, then a(out1),
+                                               // if (sel)no=1, then b(notout)
+
+    // ZR: *first deduce all out=0 bits by Or16Way(create extra chip)
+    Or16Way(in=out2, out=outzero); // (if all bits 0) then return 0, otherwise 1
+    Mux(a=true, b=false, sel=outzero, out=zr); // if (sel)out==0, then a(zr=1(true)),
+                                               // if (sel)out!=0, then b(zr=0(false))
+
+    // NG: *use AND - (if most significant digit=1(true)) return 1(true)
+    And(a=out2[15], b=true, out=neg);
+    Mux(a=false, b=true, sel=neg, out=ng); // if (sel)out==0, then a(zr=1(true)),
+                                           // if (sel)out!=0, then b(zr=0(false))
+    Or16(a=out2, b=false, out=out);
 }
