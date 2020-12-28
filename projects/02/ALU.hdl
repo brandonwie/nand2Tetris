@@ -69,7 +69,7 @@ CHIP ALU {
     Mux16(a=out1, b=notout, sel=no, out=out, out=out2); // if (sel)no=0, then a(out1),
                                                // if (sel)no=1, then b(notout)
 
-    /*got help from: http://nand2tetris-questions-and-answers-forum.32033.n3.nabble.com/ALU-Can-t-connect-gate-s-output-pin-to-part-td4026625.html
+    /*The code line above, got help from: http://nand2tetris-questions-and-answers-forum.32033.n3.nabble.com/ALU-Can-t-connect-gate-s-output-pin-to-part-td4026625.html
     regarding Error: "Can't connect gate's output pin to part"
     */
 
