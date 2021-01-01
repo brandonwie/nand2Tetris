@@ -5,20 +5,20 @@
 
 /**
  * The complete address space of the Hack computer's memory,
- * including RAM and memory-mapped I/O. 
+ * including RAM and memory-mapped I/O.
  * The chip facilitates read and write operations, as follows:
  *     Read:  out(t) = Memory[address(t)](t)
  *     Write: if load(t-1) then Memory[address(t-1)](t) = in(t-1)
- * In words: the chip always outputs the value stored at the memory 
- * location specified by address. If load==1, the in value is loaded 
- * into the memory location specified by address. This value becomes 
+ * In words: the chip always outputs the value stored at the memory
+ * location specified by address. If load==1, the in value is loaded
+ * into the memory location specified by address. This value becomes
  * available through the out output from the next time step onward.
  * Address space rules:
- * Only the upper 16K+8K+1 words of the Memory chip are used. 
- * Access to address>0x6000 is invalid. Access to any address in 
- * the range 0x4000-0x5FFF results in accessing the screen memory 
- * map. Access to address 0x6000 results in accessing the keyboard 
- * memory map. The behavior in these addresses is described in the 
+ * Only the upper 16K+8K+1 words of the Memory chip are used.
+ * Access to address>0x6000 is invalid. Access to any address in
+ * the range 0x4000-0x5FFF results in accessing the screen memory
+ * map. Access to address 0x6000 results in accessing the keyboard
+ * memory map. The behavior in these addresses is described in the
  * Screen and Keyboard chip specifications given in the book.
  */
 
@@ -27,5 +27,25 @@ CHIP Memory {
     OUT out[16];
 
     PARTS:
-    // Put your code here:
+    // 0-14 bit lines for address (15 bits)
+    // RAM 16K (0-16383) #16384 = 2^14 (00-10(not included))
+    // 0x4000(16384) ~ 0x5FFF(24575): screen (10-11(not included))
+    // 0x6000(24576): Keyboard (11)
+
+    //a[14] | a[13]  |  Part
+    //----------------------
+    //   0  |   0    | RAM16K
+    //   0  |   1    | RAM16K
+    //   1  |   0    | Screen
+    //   1  |   1    | Keyboard
+
+    DMux4Way(in=load, sel=address[13..14], a=RAMa, b=RAMb, c=screen, d=keyboard);
+    Or(a=RAMa, b=RAMb, out=RAM);
+    // 14 addresses to RAM16K
+    RAM16K(in=in, load=RAM, address=address[0..13], out=outRAM);
+    // 13 addresses to Screen
+    Screen(in=in, load=screen, address=address[0..12], out=outSCREEN);
+    Keyboard(out=outKEYBOARD);
+
+    Mux4Way16(a=outRAM, b=outRAM, c=outSCREEN, d=outKEYBOARD, sel=address[13..14], out=out);
 }
