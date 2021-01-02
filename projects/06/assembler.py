@@ -69,8 +69,6 @@ def c_convert(line):
 
 
 def translate(line):
-    # distinguishes a- and c-instructions, calls appropriate function
-    # to translate each
     if line[0] == "@":
         return a_convert(line)
     else:
@@ -98,7 +96,6 @@ def first_pass():
 
 
 def assemble():
-    # takes file stripped of labels and translates it into .hack
     rf = open(path + ".tmp")
     wf = open(path + ".hack", "w")
 
