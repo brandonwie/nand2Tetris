@@ -35,7 +35,7 @@ def normalize(line):
 # memory location for variabels starts from index 16
 variableIndex = 16
 
-# add variables and return variable index
+# add variables and return address
 def addVariable(label):
     """Add a label to the table
 
@@ -43,7 +43,7 @@ def addVariable(label):
         label (`str`)
 
     Returns:
-        `value(index)` of new label
+        `address` of new label
     """
     global variableIndex
     Symbol.table[label] = variableIndex
@@ -59,19 +59,21 @@ def convertA(line):
         line (`str`)
 
     Returns:
-        `[comp, dest, jump]`
+        `binary code`
     """
     if line[1].isalpha():  # @temp or @R0
         removeSigns = re.search(r"[^\@\ ]+", line)
         var = removeSigns.group(0)  # remove parenthesis
-        # Find variable in Symbol table
-        varIndex = Symbol.table.get(var, -1)
-        if varIndex == -1:  # if NOT found
-            varIndex = addVariable(var)  # add variable
+        # Find address in Symbol table
+        varAddress = Symbol.table.get(var, -1)
+
+        if varAddress == -1:  # if NOT found
+            varAddress = addVariable(var)  # add variable
 
     else:  # convert number to binary except first digit
-        varIndex = int(line[1:])  # @3 => 3
-    numToBinary = bin(varIndex)[2:].zfill(16)  # 3 => 0000000000000011
+        varAddress = int(line[1:])  # @3 => 3
+
+    numToBinary = bin(varAddress)[2:].zfill(16)  # 3 => 0000000000000011
     return numToBinary
 
 
@@ -136,10 +138,12 @@ def assemble():
     # os.remove(path + ".tmp") # remove temp file
 
 
+# Change path# of file you want to assemble
+# as 'path' and this program will run with the file
 path1 = "./add/Add"
 path2 = "./max/Max"
 path3 = "./rect/Rect"
-path = "./pong/Pong"
+path4 = "./pong/Pong"
 
 firstPass()
 assemble()

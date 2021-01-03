@@ -6,42 +6,32 @@
 // Multiplies R0 and R1 and stores the result in R2.
 // (R0, R1, R2 refer to RAM[0], RAM[1], and RAM[2], respectively.)
 
-// set temp = 0
-  @temp
-  M=0
-// set count = 0
+// concept: Add R0, R1 times and assign it to R2
+
+// set counter
   @count
   M=0
 
-// (LOOP) start
+// Loop until counter = R1
 (LOOP)
-// if count == R1 => if (R1 - count) = 0; JUMP TO END
+  // if (R1 - count) = 0; JUMP TO END
   @R1
   D=M // D = REM[R1]
   @count
-  D=D-M // D = REM[R1] - count
-  @ASSIGN
-  D;JEQ
+  D=D-M // D = D(R1) - count
+  @END
+  D;JEQ //
 
-// temp = temp + R0
+  // Add R0 to R2(accumulator)
   @R0
   D=M // D = REM[R0]
-  @temp
-  M=M+D // RAM[temp] = RAM[temp] + RAM[R0]
-// count++
+  @R2
+  M=M+D // R2 = R2 + R0
+  // count++
   @count
   M=M+1
-// go back to loop
+  // Go back to loop
   @LOOP
-  0;JMP
-
-// assign final result to R2
-(ASSIGN)
-  @temp
-  D=M
-  @R2
-  M=D
-  @END
   0;JMP
 
 //END loop
