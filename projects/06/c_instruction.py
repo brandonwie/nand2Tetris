@@ -1,5 +1,5 @@
 # C instructions in binary
-comp = {
+computation = {
     "0": "0101010",
     "1": "0111111",
     "-1": "0111010",
@@ -31,7 +31,7 @@ comp = {
 }
 
 
-dest = {
+destination = {
     "null": "000",
     "M": "001",
     "D": "010",
