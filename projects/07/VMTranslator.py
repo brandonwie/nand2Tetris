@@ -1,6 +1,7 @@
 import os
 
 COMMENT = "//"
+# important: p* == the memory location that p points at
 
 
 class Parser(object):
@@ -85,7 +86,7 @@ class CodeWriter(object):
         self.asm = open(asm_filename, "w")
         self.curr_file = None  # to use as Label
         self.bool_count = 0  # to use as Label
-        self.addresses = self.address_dict()
+        self.addresses = self.segment_addresses()
 
     def set_file_name(self, vm_filename):
         """Set file name as pointer"""
@@ -95,21 +96,21 @@ class CodeWriter(object):
         """Apply operation to top of stack"""
         if operation not in ["neg", "not"]:  # Binary operator
             self.pop_stack_to_D()
-        self.SP_decrement()
-        self.A_is_RAM_SP()
+        self.decrease_SP()  # SP--
+        self.pointer_SP()
 
         if operation == "add":  # Arithmetic operators
             self.write("M=M+D")
         elif operation == "sub":
             self.write("M=M-D")
+        elif operation == "and":
+            self.write("M=M&D")
         elif operation == "or":
             self.write("M=M|D")
         elif operation == "neg":
             self.write("M=-M")
         elif operation == "not":
             self.write("M=!M")
-        elif operation == "and":
-            self.write("M=M&D")
 
         elif operation in ["eq", "gt", "lt"]:  # Boolean operators
             self.write("D=M-D")
@@ -122,37 +123,43 @@ class CodeWriter(object):
             elif operation == "lt":
                 self.write("D;JLT")  # if x < y, x - y < 0
 
-            self.A_is_RAM_SP()
+            self.pointer_SP()
             self.write("M=0")  # False
             self.write("@ENDBOOL{}".format(self.bool_count))
             self.write("0;JMP")
 
             self.write("(BOOL{})".format(self.bool_count))
-            self.A_is_RAM_SP()
+            self.pointer_SP()
             self.write("M=-1")  # True
 
             self.write("(ENDBOOL{})".format(self.bool_count))
             self.bool_count += 1
         else:
             self.raise_unknown(operation)
-        self.SP_increment()
+        self.increase_SP()
 
     def write_push_pop(self, command, segment, index):
-        self.resolve_address(segment, index)
+        """PUSH or POP values
+        1. MEMORY(SEGMENT) => PUSH => STACK
+        2. STACK => POP => MEMORY(SEGMENT)
+        """
+        self.resolve_segment_address(segment, index)  # get address
         if command == "C_PUSH":  # load M[address] to D
             if segment == "constant":
-                self.write("D=A")  #   assign value to D
+                self.write("D=A")  # D holds value
             else:
-                self.write("D=M")  #   assign memory address to D
-            self.push_D_to_stack()
+                self.write("D=M")  # D holds RAM[value] (address)
+            ###D holds either VALUE(constant) or ADDRESS(else)###
+            self.push_D_to_stack()  # push D to stack
+
         elif command == "C_POP":  # load D to M[address]
-            self.write("D=A")
-            self.write("@R13")  # Store resolved address in R13
-            self.write("M=D")
-            self.pop_stack_to_D()
-            self.write("@R13")
-            self.write("A=M")
-            self.write("M=D")
+            self.write("D=A")  # D holds segment's address
+            self.write("@R13")  # invoke R13
+            self.write("M=D")  # RAM[13] holds D(segment's address)
+            self.pop_stack_to_D()  # Now D holds *SP (it got THE VALUE from SP)
+            self.write("@R13")  # since R13 has segment's address,
+            self.write("A=M")  # pointer
+            self.write("M=D")  # RAM[13] = D
         else:
             self.raise_unknown(command)
 
@@ -164,8 +171,8 @@ class CodeWriter(object):
     def raise_unknown(self, argument):
         raise ValueError("{} is an invalid argument".format(argument))
 
-    def resolve_address(self, segment, i):
-        """Resolve address to A register"""
+    def resolve_segment_address(self, segment, i):
+        """Get respective address and assign it to A register"""
         address = self.addresses.get(segment)
         if segment == "constant":
             self.write("@" + str(i))
@@ -174,14 +181,14 @@ class CodeWriter(object):
         elif segment in ["pointer", "temp"]:
             self.write("@R" + str(address + int(i)))  # integer only
         elif segment in ["local", "argument", "this", "that"]:
-            self.write("@" + address)  # string only
-            self.write("D=M")  # D = RAM[segmentPointer]
+            self.write("@" + address)
+            self.write("D=M")  # D = RAM[segment]
             self.write("@" + str(i))
             self.write("A=D+A")  # addr = RAM[segmentPointer + i]
         else:
             self.raise_unknown(segment)
 
-    def address_dict(self):
+    def segment_addresses(self):
         return {
             "local": "LCL",  # R1
             "argument": "ARG",  # R2
@@ -194,31 +201,34 @@ class CodeWriter(object):
         }
 
     def push_D_to_stack(self):
-        """Push from D onto top of stack, increment SP
+        """RAM[SP] = D, SP++
+        SP = 0, RAM[0] = stack value
         D=A(constant) or D=M(local, argument, this, that)
         """
-        self.write("@SP")
-        self.write("A=M")  # Set address to current stack pointer
-        self.write("M=D")
-        self.write("@SP")
-        self.write("M=M+1")  # Increment SP
+        self.pointer_SP()  # @SP; A=M;
+        self.write("M=D")  # RAM[SP] = D (VALUE or ADDRESS)
+        self.increase_SP()  # SP++
 
     def pop_stack_to_D(self):
-        """Decrement @SP, pop from top of stack onto D"""
-        self.write("@SP")
-        self.write("M=M-1")  # Decrement SP
-        self.write("A=M")  # Set address to current stack pointer
-        self.write("D=M")
+        """Decrement SP, pop from top stack and assign it to D
+        *decrement because SP increases after every PUSH
+        1. [write_arithmetic] start with pop_stack_to_D (except neg, not)
+        2. [write_push_pop] after resolve segment's address,
+            D register holds either memory address, or value(iff constant)
+        """
+        self.decrease_SP()  # @SP; @M=M-1
+        self.write("A=M")  # pointer
+        self.write("D=M")  # D = M(decreased SP) / now D has the value from stack
 
-    def SP_increment(self):
+    def increase_SP(self):
         self.write("@SP")
         self.write("M=M+1")
 
-    def SP_decrement(self):
+    def decrease_SP(self):
         self.write("@SP")
         self.write("M=M-1")
 
-    def A_is_RAM_SP(self):
+    def pointer_SP(self):
         self.write("@SP")
         self.write("A=M")
 
