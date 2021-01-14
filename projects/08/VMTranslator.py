@@ -436,7 +436,7 @@ class Main:
                 if file_name in filenames:
                     vm_file = f"{dirpath}/{file_name}"
                     self.vm_files = [vm_file]
-                    self.asm_file = vm_file.split("/")[-1].replace(".vm", ".asm")
+                    self.asm_file = vm_file.replace(".vm", ".asm")
         else:
             dir_name = file_path
             for dirpath, dirnames, filenames in os.walk(path):
