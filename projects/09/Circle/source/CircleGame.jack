@@ -1,0 +1,87 @@
+class CircleGame {
+   field Circle circle; // the circle of this game
+   field int direction; // the circle's current direction:
+                        // 0=none, 1=up, 2=down, 3=left, 4=right
+
+   /** Constructs a new circle Game. */
+   constructor CircleGame new() {
+      // clear screen
+      do Screen.clearScreen();
+
+      let direction = 0;  // initial state is no movement
+
+      // Wall will be automatically erased
+      // by the circle passes on top of it
+      do Wall.placeWall();
+
+      // few instructions for user
+      do Output.moveCursor(2, 45);
+      do Output.printString(" Erase Wall! ;) ");
+      do Output.moveCursor(4, 45);
+      do Output.printString(" Move: Arrow key ");
+      do Output.moveCursor(6, 45);
+      do Output.printString(" Size++: X key ");
+      do Output.moveCursor(8, 45);
+      do Output.printString(" Size--: Z key ");
+      do Output.moveCursor(10, 45);
+      do Output.printString(" quit: Q key ");
+      do Output.moveCursor(14, 41);
+      do Output.printString(" Move your circle ");
+      do Output.moveCursor(15, 41);
+      do Output.printString(" and remove the wall! ");
+      do Output.moveCursor(18, 41);
+      do Output.printString(" THANKS FOR PLAYING! ");
+
+      // Creates a circle with radius 30 and positions it at the top-left
+      // of the screen.
+      let circle = Circle.new(30, 30, 15); // draw circle after placing all
+
+      return this;
+   }
+
+   /** Disposes this game. */
+   method void dispose() {
+      do circle.dispose();
+      do Memory.deAlloc(this);
+      return;
+   }
+
+   /** Moves the circle in the current direction. */
+   method void moveCircle() {
+      if (direction = 1) { do circle.moveUp(); }
+      if (direction = 2) { do circle.moveDown(); }
+      if (direction = 3) { do circle.moveLeft(); }
+      if (direction = 4) { do circle.moveRight(); }
+      do Sys.wait(10);  // delays the next movement
+      return;
+   }
+
+   /** Runs the game: handles the user's inputs and moves the circle accordingly */
+   method void run() {
+      var char key;  // the key currently pressed by the user
+      var boolean exit;
+      let exit = false;
+
+      while (~exit) {
+         // waits for a key to be pressed
+         while (key = 0) {
+            let key = Keyboard.keyPressed();
+            do moveCircle();
+         }
+         if (key = 81)  { let exit = true; }     // q key
+         if (key = 90)  { do circle.decSize(); } // z key
+         if (key = 88)  { do circle.incSize(); } // x key
+         if (key = 131) { let direction = 1; }   // up arrow
+         if (key = 133) { let direction = 2; }   // down arrow
+         if (key = 130) { let direction = 3; }   // left arrow
+         if (key = 132) { let direction = 4; }   // right arrow
+
+         // waits for the key to be released
+         while (~(key = 0)) {
+            let key = Keyboard.keyPressed();
+            do moveCircle();
+         }
+     } // while
+     return;
+   }
+}

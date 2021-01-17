@@ -1,0 +1,9 @@
+function Util.coord 1
+push argument 0
+push argument 1
+push constant 512
+call Math.multiply 2
+add
+pop local 0
+push local 0
+return

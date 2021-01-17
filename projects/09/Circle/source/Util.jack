@@ -1,0 +1,13 @@
+/** Calculate coordiates from x, y value */
+class Util {
+	field int x;
+  field int y;
+
+  function int coord(int x, int y) {
+    var int addr;
+
+    let addr = x + (y * 512);
+
+    return addr;
+  }
+}

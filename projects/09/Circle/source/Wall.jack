@@ -1,0 +1,72 @@
+class Wall {
+  /** draw wall - code generated from "Bitmap Editor" */
+  function void drawWall(int x, int y) {
+		var int location;
+		var int memAddress;
+
+		let location = Util.coord(x, y); // calculate location
+		let memAddress = 16384+location; // set the memory location
+
+		do Memory.poke(memAddress+0, -32640);
+		do Memory.poke(memAddress+32, -32640);
+		do Memory.poke(memAddress+64, -32640);
+		do Memory.poke(memAddress+96, -1);
+		do Memory.poke(memAddress+128, 2056);
+		do Memory.poke(memAddress+160, 2056);
+		do Memory.poke(memAddress+192, 2056);
+		do Memory.poke(memAddress+224, -1);
+		do Memory.poke(memAddress+256, -32640);
+		do Memory.poke(memAddress+288, -32640);
+		do Memory.poke(memAddress+320, -32640);
+		do Memory.poke(memAddress+352, -1);
+		do Memory.poke(memAddress+384, 2056);
+		do Memory.poke(memAddress+416, 2056);
+		do Memory.poke(memAddress+448, 2056);
+		do Memory.poke(memAddress+480, -1);
+
+		return;
+	}
+  /** put walls as selected amount */
+  function void placeWall() {
+		var int i;
+
+		let i = 1; // start from 1 because it's hard to erase edges
+
+    // set the max i to 14 due to the same reason as above
+		while (i < 15) { // possible range: from 0 - 15
+      do Wall.drawWall(1, i);
+      do Wall.drawWall(2, i);
+      do Wall.drawWall(3, i);
+      do Wall.drawWall(4, i);
+      do Wall.drawWall(5, i);
+      do Wall.drawWall(6, i);
+      do Wall.drawWall(7, i);
+      do Wall.drawWall(8, i);
+      do Wall.drawWall(9, i);
+      do Wall.drawWall(10, i);
+      do Wall.drawWall(11, i);
+      do Wall.drawWall(12, i);
+      do Wall.drawWall(13, i);
+      do Wall.drawWall(14, i);
+      do Wall.drawWall(15, i);
+      do Wall.drawWall(16, i);
+      do Wall.drawWall(17, i);
+      do Wall.drawWall(18, i);
+      do Wall.drawWall(19, i);
+      do Wall.drawWall(20, i);
+      do Wall.drawWall(21, i);
+      do Wall.drawWall(22, i);
+      do Wall.drawWall(23, i);
+      do Wall.drawWall(24, i);
+      do Wall.drawWall(25, i);
+      do Wall.drawWall(26, i);
+      do Wall.drawWall(27, i);
+      do Wall.drawWall(28, i);
+      do Wall.drawWall(29, i);
+      do Wall.drawWall(30, i);
+			let i = i + 1;
+    }
+
+		return;
+	}
+}
