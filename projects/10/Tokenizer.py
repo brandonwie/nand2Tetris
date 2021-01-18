@@ -17,21 +17,34 @@ class JackTokenizer(object):
         """
         # open Jack file
         self.jack = open(jack_file_path, "r")
-
         # need current token and next token
         self.curr_token: str
         self.next_token: str
-        # token type
+        self.initialize()
+        self.keyword = self.keyword_set()
+        self.symbol = self.symbol_set()
 
     def initialize(self):
+        """Set first current and next token"""
         # read line
         line = self.jack.readline()
         # strip line
         line.strip()
-        if self.is_instruction(line):
-            pass
-        # if first index has '/', '*', or empty: comments
+        # read line until not comment
+        while self.is_comment(line):
+            line = self.jack.readline()
+        # deal with comment after code
+        line = line.split("//")[0].strip()
 
+    def is_comment(self, line):
+        first_char = line[0]
+        # if first index has '/', '*', or is empty: comments
+        return True if (first_char in ["/", "*", "\n"]) else False
+
+    def get_next_token(self):
+        self.jack.readline()
+
+    # ANCHOR API
     def has_more_tokens(self):
         pass
 
@@ -42,8 +55,8 @@ class JackTokenizer(object):
         NOTE: this method should be called
         only `if` `has_more_tokens == true`
         """
-
-        pass
+        if self.has_more_tokens() == True:
+            self.curr_token = self.next_token
 
     def token_type(self):
         """Returns the type of the current token, as a constant
@@ -52,13 +65,6 @@ class JackTokenizer(object):
         - KEYWORD, SYMBOL, IDENTIFIER, INT_CONST, STRING_CONST
         """
         pass
-
-    def is_instruction(self, line):
-        first_char = line[0]
-        return True if (first_char in ["/", "*", "\n"]) else False
-
-    def get_next_token(self):
-        self.jack.readline()
 
     def keyword_set(self):
         return set(
@@ -87,7 +93,7 @@ class JackTokenizer(object):
             ]
         )
 
-    def symbol(self):
+    def symbol_set(self):
         return set(
             [
                 "{",
