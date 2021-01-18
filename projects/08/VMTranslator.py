@@ -18,7 +18,7 @@ class Parser:
         self.vm = open(vm_file_path, "r")
         self.EOF = False
         self.commands = self.commands_dict()
-        self.curr_instruction = None
+        self.curr_instruction = []
         self.initialize_file()
 
     # API
