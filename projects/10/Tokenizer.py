@@ -1,5 +1,4 @@
-import os
-import sys
+import re
 
 
 class JackTokenizer(object):
@@ -17,6 +16,8 @@ class JackTokenizer(object):
         """
         # open Jack file
         self.jack = open(jack_file_path, "r")
+        txml_file_path = jack_file_path.replace(".jack", "T.xml")
+        self.txml = open(txml_file_path, "w")
         # need current token and next token
         self.curr_token: str
         self.next_token: str
@@ -26,7 +27,7 @@ class JackTokenizer(object):
 
     def initialize(self):
         """Set first current and next token"""
-        # read line
+        # read first line
         line = self.jack.readline()
         # strip line
         line.strip()
@@ -41,15 +42,20 @@ class JackTokenizer(object):
         # if first index has '/', '*', or is empty: comments
         return True if (first_char in ["/", "*", "\n"]) else False
 
-    def get_next_token(self):
-        self.jack.readline()
-
     # ANCHOR API
     def has_more_tokens(self):
         pass
 
+    # Rule for next token
+    # When we stop advancing?
+    # 1. when there's a white space
+    # 2. when it meets symbol
+    # 3. semi-colone
+    # Now let's think opposite, so when we advance?
+    # only when it's letter, continue
+
     def advance(self):
-        """Gets the next token from the input
+        """Gets next token from the input
         and makes it the current token
 
         NOTE: this method should be called
@@ -64,6 +70,9 @@ class JackTokenizer(object):
         @return
         - KEYWORD, SYMBOL, IDENTIFIER, INT_CONST, STRING_CONST
         """
+        pass
+
+    def write(self, token):
         pass
 
     def keyword_set(self):
