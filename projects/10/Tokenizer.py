@@ -39,8 +39,8 @@ class JackTokenizer(object):
 
     def is_comment(self, line):
         first_char = line[0]
-        # if first index has '/', '*', or is empty: comments
-        return True if (first_char in ["/", "*", "\n"]) else False
+        # if first index has '/' or is empty: comments
+        return True if (first_char in ["/", "\n"]) else False
 
     # ANCHOR API
     def has_more_tokens(self):
@@ -54,23 +54,25 @@ class JackTokenizer(object):
     # Now let's think opposite, so when we advance?
     # only when it's letter, continue
 
-    def advance(self):
+    def advance(self, line):
         """Gets next token from the input
         and makes it the current token
 
         NOTE: this method should be called
         only `if` `has_more_tokens == true`
         """
-        if self.has_more_tokens() == True:
-            self.curr_token = self.next_token
+        # read line
+        for char in line:
+            pass
 
-    def token_type(self):
+    def token_type(self, token):
         """Returns the type of the current token, as a constant
 
         @return
         - KEYWORD, SYMBOL, IDENTIFIER, INT_CONST, STRING_CONST
         """
-        pass
+        if token in self.symbol:
+            return "SYMBOL"
 
     def write(self, token):
         pass
