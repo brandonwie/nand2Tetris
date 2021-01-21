@@ -1,4 +1,4 @@
-import os, re
+import re
 
 
 class JackTokenizer(object):
@@ -14,49 +14,60 @@ class JackTokenizer(object):
         @param
         - input file / stream
         """
-        # open Jack file
-        self.jack = open(jack_file_path, "r")
+        self.jack = open(jack_file_path, "r")  # read Jack file
         txml_file_path = jack_file_path.replace(".jack", "T.xml")
-        self.txml = open(txml_file_path, "w")
-        self.txml.write("<token>\n")
-        # need current token and next token
-        self.token_list: list
-        self.curr_index: int
-        self.curr_token: str
-        self.next_token: str
-        self.initialize()
+        self.txml = open(txml_file_path, "w")  # write txml file
+        self.curr_tokens: list  # will be first mounted after calling advance()
+        self.next_tokens: list  # will be first mounted after calling init()
         self.keyword: set = self.keyword_set()
         self.symbol: set = self.symbol_set()
-        self.EOL = False
+        self.EOF = False
+        self.init()
 
-    def initialize(self):
-        """Set first current and next token"""
-        # read first line
-        line = self.jack.readline()
-        # strip line
-        line.strip()
-        # read line until not comment
-        while self.is_comment(line):
-            line = self.jack.readline()
-        line = line.split("//")[0].strip()  # deal with comment after code
+    def init(self):
+        """load first line and parse it to tokens, mount it to next_tokens"""
+        self.jack.seek(0)  # goto start
+        # if you call advance(), becomes current line tokens
+        self.load_next_line()
 
-    # receive striped line and parse the line
-    def process_line(self, line):
-        self.token_list = self.line_to_tokens(line)
-        enum = enumerate(self.token_list)
-        while not self.EOL:
-            self.advance(enum)
+    #! Actual writing happens here
+    def translate(self):
+        self.txml.write("<tokens>\n")
+        # has more tokens == more lines left
+        while self.has_more_tokens:
+            self.advance()  # mount curr_tokens from next_tokens
+            for token in self.curr_tokens:  # write curr_tokens
+                token_type = self.token_type(token)
+                self.write(token_type, token)
+            self.load_next_line()  # prepare next_tokens
+        self.txml.write("</tokens>\n")
+
+    # read a new line, parse it to tokens,
+    # mount it to "next_tokens"
+    def load_next_line(self):
+        loaded = False
+        while not loaded and self.has_more_tokens:
+            current_position = self.jack.tell()
+            line = self.jack.readline().strip()
+            if not self.is_comment(line):
+                # remove comments after code
+                line = line.split("//")[0].strip()
+                # mount next line tokens
+                self.next_tokens = self.parse_line_to_tokens(line)
+                loaded = True
+            if current_position == self.jack.tell():
+                self.EOF = True
 
     def is_comment(self, line) -> bool:
-        first_char = line[0]
         # if first index has '/' or is empty: comments
-        return True if first_char in ["/", "*", "\n"] else False
+        return True if len(line) > 0 and line[0] in ["/", "*", "\n"] else False
 
     # ANCHOR API
+    @property
     def has_more_tokens(self) -> bool:
-        return self.EOL
+        return not self.EOF
 
-    def line_to_tokens(self, line: str) -> list:
+    def parse_line_to_tokens(self, line: str) -> list:
         """get whole line and parse it
         @param
         - line with no comment
@@ -64,25 +75,16 @@ class JackTokenizer(object):
         @return
         - array of tokens
         """
-        regex = r"[_a-zA-Z]?[_a-zA-Z0-9]+|[0-9]+|[{}().,;+\-*/&|<>=~]|\".+\""
+        # custom made regex
+        regex = r"[_a-zA-Z]?[_a-zA-Z0-9]+|[0-9]+|[\[\]{}().,;+\-*/&|<>=~]|\".+\""
         return re.findall(regex, line)
 
-    def advance(self, enum: enumerate):
+    def advance(self):
         """Gets next token from the input and makes it the current token
 
         NOTE: this method should be called only `if` `has_more_tokens == true`
         """
-        # use enumerate & next() to manually advance
-        if self.has_more_tokens():
-            try:
-                (index, value) = next(enum)  # call next line
-                self.curr_token = self.next_token
-                token_type = self.token_type(self.curr_token)
-                self.write(token_type, self.curr_token)
-                self.next_token = value
-
-            except:  # if no more next, declare "End Of Line"
-                self.EOL = True
+        self.curr_tokens = self.next_tokens
 
     def token_type(self, token: str) -> str:
         """Returns the type of the current token, as a constant
@@ -93,6 +95,7 @@ class JackTokenizer(object):
         @return
         - KEYWORD, SYMBOL, IDENTIFIER, INT_CONST, STRING_CONST
         """
+        # didn't use CAPITAL letters not to avoid verbose
         if token in self.keyword:
             return "keyword"
         elif token in self.symbol:
@@ -104,9 +107,23 @@ class JackTokenizer(object):
         else:
             return "identifier"
 
+    # API END
+
     # write single token
     def write(self, type, token):
+        if token == "<":
+            token = "&lt"
+        if token == ">":
+            token = "&gt"
+        if token == "&":
+            token = "&amp"
+        if type == "stringConstant":
+            token = token.replace('"', "")
         self.txml.write(f"<{type}> {token} </{type}>\n")
+
+    def close(self):
+        self.jack.close()
+        self.txml.close()
 
     def keyword_set(self):
         return set(

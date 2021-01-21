@@ -24,13 +24,11 @@ import re
 #         while self.curr_index < len(self.token_array):
 #             self.advance(test_enum)
 
-with open("text.txt", "r") as f:
-    line = f.readline()
-    arr = line.split(" ")
-    enum = enumerate(arr)
-    li1 = next(enum)
-    print(li1)
-    li2 = next(enum)
-    print(li2)
-    li3 = next(enum)
-    print(li3)
+
+line = "constructor Square new(int Ax, int Ay, int Asize) { 52 + 3"
+
+regex = r"[_a-zA-Z]?[_a-zA-Z0-9]+|[0-9]+|[{}().,;+\-*/&|<>=~]|\".+\""
+
+token_array = re.findall(regex, line)
+
+print(token_array)
