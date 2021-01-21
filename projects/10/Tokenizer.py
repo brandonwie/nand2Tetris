@@ -1,4 +1,4 @@
-import re
+import os, re
 
 
 class JackTokenizer(object):
@@ -18,12 +18,16 @@ class JackTokenizer(object):
         self.jack = open(jack_file_path, "r")
         txml_file_path = jack_file_path.replace(".jack", "T.xml")
         self.txml = open(txml_file_path, "w")
+        self.txml.write("<token>\n")
         # need current token and next token
+        self.token_list: list
+        self.curr_index: int
         self.curr_token: str
         self.next_token: str
         self.initialize()
-        self.keyword = self.keyword_set()
-        self.symbol = self.symbol_set()
+        self.keyword: set = self.keyword_set()
+        self.symbol: set = self.symbol_set()
+        self.EOL = False
 
     def initialize(self):
         """Set first current and next token"""
@@ -34,48 +38,75 @@ class JackTokenizer(object):
         # read line until not comment
         while self.is_comment(line):
             line = self.jack.readline()
-        # deal with comment after code
-        line = line.split("//")[0].strip()
+        line = line.split("//")[0].strip()  # deal with comment after code
 
-    def is_comment(self, line):
+    # receive striped line and parse the line
+    def process_line(self, line):
+        self.token_list = self.line_to_tokens(line)
+        enum = enumerate(self.token_list)
+        while not self.EOL:
+            self.advance(enum)
+
+    def is_comment(self, line) -> bool:
         first_char = line[0]
         # if first index has '/' or is empty: comments
-        return True if (first_char in ["/", "\n"]) else False
+        return True if first_char in ["/", "*", "\n"] else False
 
     # ANCHOR API
-    def has_more_tokens(self):
-        pass
+    def has_more_tokens(self) -> bool:
+        return self.EOL
 
-    # Rule for next token
-    # When we stop advancing?
-    # 1. when there's a white space
-    # 2. when it meets symbol
-    # 3. semi-colone
-    # Now let's think opposite, so when we advance?
-    # only when it's letter, continue
+    def line_to_tokens(self, line: str) -> list:
+        """get whole line and parse it
+        @param
+        - line with no comment
 
-    def advance(self, line):
-        """Gets next token from the input
-        and makes it the current token
-
-        NOTE: this method should be called
-        only `if` `has_more_tokens == true`
+        @return
+        - array of tokens
         """
-        # read line
-        for char in line:
-            pass
+        regex = r"[_a-zA-Z]?[_a-zA-Z0-9]+|[0-9]+|[{}().,;+\-*/&|<>=~]|\".+\""
+        return re.findall(regex, line)
 
-    def token_type(self, token):
+    def advance(self, enum: enumerate):
+        """Gets next token from the input and makes it the current token
+
+        NOTE: this method should be called only `if` `has_more_tokens == true`
+        """
+        # use enumerate & next() to manually advance
+        if self.has_more_tokens():
+            try:
+                (index, value) = next(enum)  # call next line
+                self.curr_token = self.next_token
+                token_type = self.token_type(self.curr_token)
+                self.write(token_type, self.curr_token)
+                self.next_token = value
+
+            except:  # if no more next, declare "End Of Line"
+                self.EOL = True
+
+    def token_type(self, token: str) -> str:
         """Returns the type of the current token, as a constant
+
+        @param
+        - current token in current token array
 
         @return
         - KEYWORD, SYMBOL, IDENTIFIER, INT_CONST, STRING_CONST
         """
-        if token in self.symbol:
-            return "SYMBOL"
+        if token in self.keyword:
+            return "keyword"
+        elif token in self.symbol:
+            return "symbol"
+        elif '"' in token:
+            return "stringConstant"
+        elif token.isnumeric():
+            return "integerConstant"
+        else:
+            return "identifier"
 
-    def write(self, token):
-        pass
+    # write single token
+    def write(self, type, token):
+        self.txml.write(f"<{type}> {token} </{type}>\n")
 
     def keyword_set(self):
         return set(
