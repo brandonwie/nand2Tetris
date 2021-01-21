@@ -37,8 +37,11 @@ class CompilationEngine:
 
     # op: + - = > <
 
+    # TODO
     def compile_class(self):
-        self.write()
+        self.write_open_tag("class")
+        self.write_next_token()  # class
+        self.write_next_token()  #
 
     def compile_class_var_dec(self):
         pass
@@ -82,11 +85,14 @@ class CompilationEngine:
     def compile_expression_list(self):
         pass
 
+    # TODO boolean functions for segregation
+
+    # ANCHOR writing part
     @property
     def curr_indent(self):
         return "\t" * self.indent_count
 
-    def write(self):
+    def write_next_token(self):
         if self.is_written:  # if curr_line is already written,
             # read new line and mount it to curr_token
             self.curr_token = self.txml.readline()
@@ -94,3 +100,11 @@ class CompilationEngine:
             # if not, set "is_written" to True bcs we're gonna write one
             self.is_written = True
         self.xml.write(f"{self.curr_indent}{self.curr_token}\n")
+
+    def write_open_tag(self, tag):
+        self.xml.write(f"<{tag}>\n")
+        self.indent_count += 1
+
+    def write_closing_tag(self, tag):
+        self.indent_count -= 1
+        self.xml.write(f"{self.curr_indent}</{tag}>\n")
