@@ -10,34 +10,14 @@ class CompilationEngine:
         self.txml = open(txml_file, "r")
         xml = txml_file.replace("T.xml", ".xml")
         self.xml = open(xml, "w")
-        self.is_written = False  # check if line is written
+        self.is_written = True  # check if line is written
         self.indent_count = 0
-        self.txml.readline()  # remove <tokens> tag
+        self.txml.readline()  # pass <tokens> tag
+        self.curr_token = ""
 
-    # REVIEW reading every line from xxxT.xml,
+    # NOTE reading every line from xxxT.xml,
     # Need to deal two lines at a time
     # Starts and ends with class, meaning calling compile_class() will do the whole process
-
-    # Grammer
-    # statement: if/while/let
-
-    # statements: statement* (zero or more)
-
-    # ifStatement: if() {}
-
-    # whileStatement: while () {}
-
-    # letStatement: let varName = expression ;
-
-    # expression: term (op term)? (one or more)
-
-    # term: varName | constant
-
-    # varName: a string not beginning with a digit
-
-    # constant: a decimal number
-
-    # op: + - = > <
 
     # ANCHOR PROGRAM STRUCTURE
     def compile_class(self):
@@ -67,7 +47,9 @@ class CompilationEngine:
         self.write_next_token()  # (static|field)
         self.write_next_token()  # type
         self.write_next_token()  # varName
-        self.compile_expression_list()
+        self.compile_multiple(",", "identifier")  # (',' varName)*
+        self.write_next_token()  # ';'
+        self.write_closing_tag("classVarDec")
 
     def compile_subroutine_dec(self):
         """
@@ -80,7 +62,15 @@ class CompilationEngine:
         self.write_next_token()  # '('
         self.compile_parameter_list()  # parameterList
         self.write_next_token()  # ')'
-        self.compile_subroutine_body()
+        self.write_opening_tag("subroutineBody")
+        self.write_next_token()  # '{'
+        self.save_token_if_written()
+        while "var" in self.curr_token:
+            self.compile_var_dec()  # varDec*
+            self.save_token_if_written()
+        self.compile_statements()  # statements
+        self.write_next_token()  # '}'
+        self.write_closing_tag("subroutineBody")
         self.write_closing_tag("subroutineDec")
 
     def compile_parameter_list(self):
@@ -100,9 +90,10 @@ class CompilationEngine:
             self.save_token_if_written()
         self.write_closing_tag("parameterList")
 
+    # NOTE this function is in API, but not used here
     def compile_subroutine_body(self):
         """
-        - `subroutineBody`: '{' varDec* statements '}'
+        '{' varDec* statements '}'
         """
         self.write_opening_tag("subroutineBody")
         self.write_next_token()  # '{'
@@ -149,19 +140,81 @@ class CompilationEngine:
 
     # ANCHOR SUB-FUNCTIONS FOR STATEMENTS
     def compile_let(self):
-        pass
+        """
+        'let' varName ('[' expression ']')? '=' expression ';'
+        """
+        self.write_opening_tag("letStatement")
+        self.write_next_token()  # 'let'
+        self.write_next_token()  # varName
+        self.save_token_if_written()
+        if "[" in self.curr_token:  # ('[' expression ']')?
+            self.write_next_token()  # '['
+            self.compile_expression()  # expression
+            self.write_next_token()  # ']'
+        self.write_next_token()  # '='
+        self.compile_expression()  # expression
+        self.write_next_token()  # ';'
+        self.write_closing_tag("letStatement")
 
     def compile_if(self):
-        pass
+        """
+        'if' '(' expression ')' '{' statements '}' ( 'else' '{' statements '}' )?
+        """
+        self.write_opening_tag("ifStatement")
+        self.write_next_token()  # if
+        self.write_next_token()  # '('
+        self.compile_expression()  # expression
+        self.write_next_token()  # ')'
+        self.write_next_token()  # '{'
+        self.compile_statements()  # statements
+        self.write_next_token()  # '}'
+        self.save_token_if_written()
+        if "else" in self.curr_token:  # else?
+            self.write_next_token()  # else
+            self.write_next_token()  # '{'
+            self.compile_statements()  # statements
+            self.write_next_token()  # '}'
+        self.write_closing_tag("ifStatement")
 
     def compile_while(self):
-        pass
+        """
+        'while' '(' expression ')' '{' statements '}'
+        """
+        self.write_opening_tag("whileStatement")
+        self.write_next_token()  # 'while'
+        self.write_next_token()  # '('
+        self.compile_expression()  # expression
+        self.write_next_token()  # ')'
+        self.write_next_token()  # '{'
+        self.compile_statements()  # statements
+        self.write_next_token()  # '}'
+        self.write_closing_tag("whileStatement")
 
     def compile_do(self):
-        pass
+        self.write_opening_tag("doStatement")
+        self.write_next_token()  # 'do'
+        self.write_next_token()  # (subroutineName | className | varName)
+        self.save_token_if_written()
+        if "." in self.curr_token:
+            self.write_next_token()  # '.'
+            self.write_next_token()  # subroutineName
+        self.write_next_token()  # '('
+        self.compile_expression_list()  # expressionList
+        self.write_next_token()  # ')'
+        self.write_next_token()  # ';'
+        self.write_closing_tag("doStatement")
 
     def compile_return(self):
-        pass
+        """
+        'return' expression? ';'
+        """
+        self.write_opening_tag("returnStatement")
+        self.write_next_token()  # 'return'
+        self.save_token_if_written()
+        if ";" not in self.curr_token:  # expression?
+            self.compile_expression()  # expression
+        self.write_next_token()  # ';'
+        self.write_closing_tag("returnStatement")
 
     # ANCHOR EXPRESSIONS
 
@@ -230,11 +283,11 @@ class CompilationEngine:
             self.save_token_if_written()
 
     # ANCHOR Boolean functions
-    def is_class_var_dec(self) -> bool:
+    def is_class_var_dec(self):
         self.save_token_if_written()
         return "static" in self.curr_token or "field" in self.curr_token
 
-    def is_subroutine_dec(self) -> bool:
+    def is_subroutine_dec(self):
         self.save_token_if_written()
         return (
             "constructor" in self.curr_token
@@ -242,7 +295,7 @@ class CompilationEngine:
             or "method" in self.curr_token
         )
 
-    def is_statement(self) -> bool:
+    def is_statement(self):
         self.save_token_if_written()
         return (
             "let" in self.curr_token
@@ -252,13 +305,13 @@ class CompilationEngine:
             or "return" in self.curr_token
         )
 
-    def is_op(self) -> bool:
+    def is_op(self):
         self.save_token_if_written()
-        return bool(re.search(r"> (\+|-|\*|/|&amp;|\||&lt;|&gt;|=) <", self.curr_token))
+        return re.search(r"> (\+|-|\*|/|&amp;|\||&lt;|&gt;|=) <", self.curr_token)
 
-    def is_unary_op_term(self) -> bool:
+    def is_unary_op_term(self):
         self.save_token_if_written()
-        return bool(re.search(r"> (-|~) <", self.curr_token))
+        return re.search(r"> (-|~) <", self.curr_token)
 
     # ANCHOR Examine if current token is written or not
     def save_token_if_written(self):
@@ -274,17 +327,18 @@ class CompilationEngine:
     # ANCHOR Writing part
     @property
     def curr_indent(self):
-        return "\t" * self.indent_count
+        return "  " * self.indent_count
 
     def write_next_token(self):
         if self.is_written:
             self.curr_token = self.txml.readline()
+        else:
+            self.is_written = True
         # write current token
-        self.xml.write(f"{self.curr_indent}{self.curr_token}\n")
-        self.is_written = True
+        self.xml.write(f"{self.curr_indent}{self.curr_token}")
 
     def write_opening_tag(self, tag):
-        self.xml.write(f"<{tag}>\n")
+        self.xml.write(f"{self.curr_indent}<{tag}>\n")
         self.indent_count += 1
 
     def write_closing_tag(self, tag):

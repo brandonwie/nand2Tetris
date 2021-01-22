@@ -1,28 +1,26 @@
-from Tokenizer import JackTokenizer
+from JackTokenizer import JackTokenizer
+from CompilationEngine import CompilationEngine
 import os
 
 
 class JackAnalyzer:
     def __init__(self, file_path):
-        jack = JackTokenizer(file_path)
-        jack.translate()
-        jack.close()
+        self.jack_files = self.parse_argv(file_path)
+        for jack_file in self.jack_files:
+            jack = JackTokenizer(jack_file)
+            jack.translate()
+            jack.close()
+            txml_file = jack_file.replace(".jack", "T.xml")
+            xml = CompilationEngine(txml_file)
+            xml.compile_class()
 
-    # def parse_argv(self, file_path):
-    #     path = os.getcwd()
-    #     if ".jack" in file_path:
-    #         file_name = file_path
-    #         for dirpath, dirnames, filenames in os.walk(path):
-    #             if file_name in filenames:
-    #                 jack_file = f"{dirpath}/{file_name}"
-    #                 return [jack_file]
-    #     else:
-    #         dir_name = file_path
-    #         for dirpath, dirnames, filenames in os.walk(path):
-    #             if dir_name == dirpath.split("/")[-1]:
-    #                 self.asm_file = f"{dirpath}/{dir_name}.asm"
-    #                 vm_files = filter(lambda x: ".vm" in x, filenames)
-    #                 return [dirpath + "/" + vm for vm in vm_files]
+    def parse_argv(self, file_path) -> list:
+        if ".jack" in file_path:
+            return [file_path]
+        else:
+            dirpath, dirnames, filenames = next(os.walk(file_path), [[], [], []])
+            jack_files = filter(lambda x: ".jack" in x, filenames)
+            return [file_path + "/" + jack for jack in jack_files]
 
 
 if __name__ == "__main__":

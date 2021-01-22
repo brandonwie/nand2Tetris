@@ -1,7 +1,7 @@
 import re
 
 
-class JackTokenizer(object):
+class JackTokenizer:
     """Handles the compiler's input
     - ignore white space
     - Advancing the input, one token at a time
