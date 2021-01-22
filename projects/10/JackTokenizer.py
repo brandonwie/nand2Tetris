@@ -112,11 +112,11 @@ class JackTokenizer:
     # write single token
     def write(self, type, token):
         if token == "<":
-            token = "&lt"
+            token = "&lt;"
         if token == ">":
-            token = "&gt"
+            token = "&gt;"
         if token == "&":
-            token = "&amp"
+            token = "&amp;"
         if type == "stringConstant":
             token = token.replace('"', "")
         self.txml.write(f"<{type}> {token} </{type}>\n")

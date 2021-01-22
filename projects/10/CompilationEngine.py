@@ -344,3 +344,7 @@ class CompilationEngine:
     def write_closing_tag(self, tag):
         self.indent_count -= 1
         self.xml.write(f"{self.curr_indent}</{tag}>\n")
+
+    def close(self):
+        self.txml.close()
+        self.xml.close()
