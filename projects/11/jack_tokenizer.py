@@ -1,10 +1,32 @@
 import re
+from typing import Iterable, Iterator
+
+# ANCHOR RegEx
+# positive lookahead/lookbehind: no character should found before/after the keyword
+KEYWORD = "(?<![\w])(class|constructor|function|method|field|static|var|int|char|boolean|void|true|false|null|this|let|do|if|else|while|return)(?![\w])"
+# Nothing special about symbols
+SYMBOL = "([{}()[\].,;+\-*/&|<>=~])"
+# Match INT_CONST if no word character right before/after digits (*max num 32767 is not considered)
+INT_CONST = "(?<![\w])(\d+)(?![\w])"
+# Any character between double quote: () <- automatically exclude double quotes
+STRING_CONST = '"([^\n]*)"'
+# A sequence of letters, digits, and underscore not starting with a digit
+IDENTIFIER = "([_a-zA-Z]\w*)"
+
+# leftmost checked first, so IDENTIFIER comes last
+LEXICAL_ELEMENTS = f"{KEYWORD}|{SYMBOL}|{INT_CONST}|{STRING_CONST}|{IDENTIFIER}"
+# the list below matches the order of LEXICAL_ELEMENTS above
+LEXICAL_ELEMENTS_LIST = ["KEYWORD", "SYMBOL", "INT_CONST", "STRING_CONST", "IDENTIFIER"]
+
+# ANCHOR Compile RegEx
+LEXICAL_ELEMENTS_REGEX = re.compile(LEXICAL_ELEMENTS)
+SINGLE_LINE_COMMENT_REGEX = re.compile("//.*")
+MULTI_LINE_COMMENT_REGEX = re.compile("/\*.*?\*/", flags=re.DOTALL)
 
 
 class JackTokenizer:
     """Handles the compiler's input
-    - ignore white space
-    - Advancing the input, one token at a time
+    - Parse all tokens one token at a time
     - Getting the value and type of current token
     """
 
@@ -14,165 +36,56 @@ class JackTokenizer:
         @param
         - input file / stream
         """
-        self.jack = open(jack_file_path, "r")  # read Jack file
-        txml_file_path = jack_file_path.replace(".jack", "T.xml")
-        self.txml = open(txml_file_path, "w")  # write txml file
-        self.curr_tokens: list  # will be first mounted after calling advance()
-        self.next_tokens: list  # will be first mounted after calling init()
-        self.keyword: set = self.keyword_set()
-        self.symbol: set = self.symbol_set()
-        self.EOF = False
-        self.init()
-
-    def init(self):
-        """load first line and parse it to tokens, mount it to next_tokens"""
-        self.jack.seek(0)  # goto start
-        # if you call advance(), becomes current line tokens
-        self.load_next_line()
-
-    #! Actual writing happens here
-    def translate(self):
-        self.txml.write("<tokens>\n")
-        # has more tokens == more lines left
-        while self.has_more_tokens:
-            self.advance()  # mount curr_tokens from next_tokens
-            for token in self.curr_tokens:  # write curr_tokens
-                token_type = self.token_type(token)
-                self.write(token_type, token)
-            self.load_next_line()  # prepare next_tokens
-        self.txml.write("</tokens>\n")
-
-    # read a new line, parse it to tokens,
-    # mount it to "next_tokens"
-    def load_next_line(self):
-        loaded = False
-        while not loaded and self.has_more_tokens:
-            current_position = self.jack.tell()
-            line = self.jack.readline().strip()
-            if not self.is_comment(line):
-                # remove comments after code
-                line = line.split("//")[0].strip()
-                # mount next line tokens
-                self.next_tokens = self.parse_line_to_tokens(line)
-                loaded = True
-            if current_position == self.jack.tell():
-                self.EOF = True
-
-    def is_comment(self, line) -> bool:
-        # if first index has '/' or is empty: comments
-        return True if len(line) > 0 and line[0] in ["/", "*", "\n"] else False
+        self.jack = open(jack_file_path, "r")  # open Jack file
+        self.jack_file = self.jack.read()  # read whole file
+        self.tokens: list[tuple] = self.tokenize()  # all tokens
+        self.next_token = self.tokens.pop(0)  # load first token in next_token
+        self.jack.close()  # close jack file
 
     # ANCHOR API
-    @property
-    def has_more_tokens(self) -> bool:
-        return not self.EOF
-
-    def parse_line_to_tokens(self, line: str) -> list:
-        """get whole line and parse it
-        @param
-        - line with no comment
-
-        @return
-        - array of tokens
-        """
-        # custom made regex
-        regex = r"[_a-zA-Z]?[_a-zA-Z0-9]+|[0-9]+|[\[\]{}().,;+\-*/&|<>=~]|\".+\""
-        return re.findall(regex, line)
+    def has_more_tokens(self):
+        return bool(self.next_token)
 
     def advance(self):
         """Gets next token from the input and makes it the current token
 
         NOTE: this method should be called only `if` `has_more_tokens == true`
         """
-        self.curr_tokens = self.next_tokens
-
-    def token_type(self, token: str) -> str:
-        """Returns the type of the current token, as a constant
-
-        @param
-        - current token in current token array
-
-        @return
-        - KEYWORD, SYMBOL, IDENTIFIER, INT_CONST, STRING_CONST
-        """
-        # didn't use CAPITAL letters not to avoid verbose
-        if token in self.keyword:
-            return "keyword"
-        elif token in self.symbol:
-            return "symbol"
-        elif '"' in token:
-            return "stringConstant"
-        elif token.isnumeric():
-            return "integerConstant"
+        self.curr_token = self.next_token
+        if self.has_more_tokens():
+            self.next_token = self.tokens.pop(0)
         else:
-            return "identifier"
+            self.next_token = False
 
-    # API END
-
-    # write single token
-    def write(self, type, token):
-        if token == "<":
-            token = "&lt;"
-        if token == ">":
-            token = "&gt;"
-        if token == "&":
-            token = "&amp;"
-        if type == "stringConstant":
-            token = token.replace('"', "")
-        self.txml.write(f"<{type}> {token} </{type}>\n")
-
-    def close(self):
-        self.jack.close()
-        self.txml.close()
-
-    def keyword_set(self):
-        return set(
-            [
-                "class",
-                "constructor",
-                "function",
-                "method",
-                "field",
-                "static",
-                "var",
-                "int",
-                "char",
-                "boolean",
-                "void",
-                "true",
-                "false",
-                "null",
-                "this",
-                "let",
-                "do",
-                "if",
-                "else",
-                "while",
-                "return",
-            ]
+    def tokenize(self) -> list[tuple]:
+        """remove comments and tokenize whole file
+        @return
+        - tuple (token, type) of tokens
+        """
+        trimmed_file = self.remove_comments()
+        #! IMPORTANT TO REMEMBER
+        # NOTE re.findall() will return an array of all non-overlapping regex matches in the string. “Non-overlapping” means that the string is searched through from left to right, and the next match attempt starts beyond the previous match. If the regex contains one or more capturing groups, re.findall() returns an array of tuples, with each tuple containing text matched by all the capturing groups
+        token_tuples: Iterable[tuple] = LEXICAL_ELEMENTS_REGEX.findall(trimmed_file)
+        types = map(
+            lambda token_tuple: LEXICAL_ELEMENTS_LIST[
+                next(index for index, value in enumerate(token_tuple) if value)
+            ],
+            token_tuples,
         )
-
-    def symbol_set(self):
-        return set(
-            [
-                "{",
-                "}",
-                "(",
-                ")",
-                "[",
-                "]",
-                ".",
-                ",",
-                ";",
-                "+",
-                "-",
-                "*",
-                "/",
-                "&",
-                "|",
-                "<",
-                ">",
-                "=",
-                "~",
-            ]
+        tuples_to_tokens = map(
+            lambda token: next(value for index, value in enumerate(token) if value),
+            token_tuples,
         )
+        # NOTE The zip() function returns a zip object, which is an iterator of tuples where the first item in each passed iterator is paired together, and then the second item in each passed iterator are paired together etc.
+        token_type_tuples: Iterator = zip(tuples_to_tokens, types)
+        # Convert to list by unpacking
+        return [*token_type_tuples]
+
+    def remove_comments(self):
+        remove_single_line_comments = re.sub(
+            SINGLE_LINE_COMMENT_REGEX, "", self.jack_file
+        )
+        remove_multi_line_comments = re.sub(
+            MULTI_LINE_COMMENT_REGEX, "", remove_single_line_comments
+        )
+        return remove_multi_line_comments

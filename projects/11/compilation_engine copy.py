@@ -1,6 +1,3 @@
-from vm_writer import VMWriter
-from jack_tokenizer import JackTokenizer
-from symbol_table import SymbolTable
 import re
 
 
@@ -9,17 +6,14 @@ class CompilationEngine:
     using the VMWriter
     """
 
-    def __init__(self, jack_file):
-        # init Tokenizer
-        self.tokenizer = JackTokenizer(jack_file)
-        # init VM Writer
-        self.vm_writer = VMWriter(jack_file)
-        # init symbol table
-        self.symbol_table = SymbolTable
-
-        self.is_curr_token_written = False
-        self.curr_token: str
-        self.next_token: str
+    def __init__(self, txml_file):
+        self.txml = open(txml_file, "r")
+        xml = txml_file.replace("T.xml", ".xml")
+        self.xml = open(xml, "w")
+        self.is_written = True  # check if line is written
+        self.indent_count = 0
+        self.txml.readline()  # pass <tokens> tag
+        self.curr_token = ""
 
     # NOTE reading every line from xxxT.xml,
     # Need to deal two lines at a time
@@ -30,14 +24,20 @@ class CompilationEngine:
         """
         'class' className '{'classVarDec* subroutineDec*'}'
         """
-        self.load_token()  # 'class'
-        self.class_name = self.load_token()  # className
-        self.load_token()  # '{'
+        self.write_opening_tag("class")
+        self.write_next_token()  # class
+        self.write_next_token()  # className
+        self.write_next_token()  # {
         while self.is_class_var_dec():
             self.compile_class_var_dec()
+            self.save_token_if_written()
+
         while self.is_subroutine_dec():
-            self.compile_subroutine_body()
-        self.vm_writer.close()
+            self.compile_subroutine_dec()
+            self.save_token_if_written()
+
+        self.write_next_token()  # '}'
+        self.write_closing_tag("class")
 
     def compile_class_var_dec(self):
         """
@@ -325,10 +325,9 @@ class CompilationEngine:
             self.is_written = False
 
     # ANCHOR Writing part
-
-    def get_next_token(self):
-        if self.tokenizer.has_more_tokens():
-            self.tokenizer.advance()
+    @property
+    def curr_indent(self):
+        return "  " * self.indent_count
 
     def write_next_token(self):
         if self.is_written:
@@ -337,3 +336,15 @@ class CompilationEngine:
             self.is_written = True
         # write current token
         self.xml.write(f"{self.curr_indent}{self.curr_token}")
+
+    def write_opening_tag(self, tag):
+        self.xml.write(f"{self.curr_indent}<{tag}>\n")
+        self.indent_count += 1
+
+    def write_closing_tag(self, tag):
+        self.indent_count -= 1
+        self.xml.write(f"{self.curr_indent}</{tag}>\n")
+
+    def close(self):
+        self.txml.close()
+        self.xml.close()

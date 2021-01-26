@@ -1,6 +1,11 @@
 class VMWriter:
     def __init__(self, txml_path: str):
-        vm_file = txml_path.replace("T.xml", ".vm")
+        """Creates a new output .vm file and prepares it for writing
+
+        Args:
+            txml_path (str): path for .vm file
+        """
+        vm_file = txml_path.replace(".jack", ".vm")
         self.vm = open(vm_file, "w")
 
     def write_push(self, segment: str, index: int):
@@ -56,3 +61,6 @@ class VMWriter:
 
     def write_return(self):
         self.vm.write("return")
+
+    def close(self):
+        self.vm.close()
