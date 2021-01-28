@@ -1,339 +1,137 @@
-from vm_writer import VMWriter
-from jack_tokenizer import JackTokenizer
 from symbol_table import SymbolTable
-import re
+from jack_tokenizer import JackTokenizer
+from vm_writer import VMWriter
+
+CONVERT_KIND = {"ARG": "ARG", "STATIC": "STATIC", "VAR": "VAR", "FIELD": "THIS"}
+
+ARITHMETIC = {
+    "+": "ADD",
+    "-": "SUB",
+    "=": "EQ",
+    ">": "GT",
+    "<": "LT",
+    "&": "AND",
+    "|": "OR",
+}
+
+ARITHMETIC_UNARY = {"-": "NEG", "~": "NOT"}
 
 
 class CompilationEngine:
-    """[summary] Gets its input from Tokenizer and write its output
-    using the VMWriter
+    """NOTE remember that "is_xxx()" checks on the next token,
+    and load the next token to curr_token before starting sub-methods
+    using "load_next_token()" and you can use values with it
     """
 
     def __init__(self, jack_file):
-        # init Tokenizer
-        self.tokenizer = JackTokenizer(jack_file)
-        # init VM Writer
         self.vm_writer = VMWriter(jack_file)
-        # init symbol table
-        self.symbol_table = SymbolTable
+        self.tokenizer = JackTokenizer(jack_file)
+        self.symbol_table = SymbolTable()
+        self.queue = []
 
-        self.is_curr_token_written = False
-        self.curr_token: str
-        self.next_token: str
-
-    # NOTE reading every line from xxxT.xml,
-    # Need to deal two lines at a time
-    # Starts and ends with class, meaning calling compile_class() will do the whole process
-
-    # ANCHOR PROGRAM STRUCTURE
+    # 'class' className '{' classVarDec* subroutineDec* '}'
     def compile_class(self):
-        """
-        'class' className '{'classVarDec* subroutineDec*'}'
-        """
-        self.load_token()  # 'class'
-        self.class_name = self.load_token()  # className
-        self.load_token()  # '{'
-        while self.is_class_var_dec():
-            self.compile_class_var_dec()
+        #! Beginning of all
+        # * save name of the class and move on
+        self.load_next_token()  # 'class'
+        self.class_name = self.load_next_token()  # className
+        self.load_next_token()  # curr_token = '{'
+
+        # if next token == 'static' or 'field',
+        while self.is_class_var_dec():  # check next token
+            self.compile_class_var_dec()  # classVarDec*
         while self.is_subroutine_dec():
-            self.compile_subroutine_body()
+            self.compile_subroutine()  # subroutineDec*
         self.vm_writer.close()
 
+    # ('static' | 'field' ) type varName (',' varName)* ';'
     def compile_class_var_dec(self):
-        """
-        ('static'|'field') type varName (',' varName)* ';'
-        """
-        self.write_opening_tag("classVarDec")
-        self.write_next_token()  # (static|field)
-        self.write_next_token()  # type
-        self.write_next_token()  # varName
-        self.compile_multiple(",", "identifier")  # (',' varName)*
-        self.write_next_token()  # ';'
-        self.write_closing_tag("classVarDec")
+        kind = self.load_next_token()  # curr_token = static | field
+        type = self.load_next_token()  # curr_token = type
+        name = self.load_next_token()  # curr_token = varName
+        self.symbol_table.define(name, type, kind.upper())
+        while self.check_next_token() != ";":  # (',' varName)*
+            self.load_next_token()  # ','
+            name = self.load_next_token()  # varName
+            self.symbol_table.define(name, type, kind.upper())
+        self.load_next_token()  # ';'
+        # next_token = 'constructor' | 'function' | 'method'
 
-    def compile_subroutine_dec(self):
-        """
-        - `subroutineDec`: ('constructor' | 'function' | 'method') ('void' | type) subroutineName '(' parameterList ')' subroutineBody
-        """
-        self.write_opening_tag("subroutineDec")
-        self.write_next_token()  # ('constructor' | 'function' | 'method')
-        self.write_next_token()  # ('void' | type)
-        self.write_next_token()  # subroutineName
-        self.write_next_token()  # '('
+    # subroutineDec: ('constructor' | 'function' | 'method') ('void' | type) subroutineName '(' parameterList ')' subroutineBody
+    # subroutineBody: '{' varDec* statements '}'
+    # TODO
+    def compile_subroutine(self):
+        subroutine_kind = (
+            self.load_next_token()
+        )  # ('constructor' | 'function' | 'method')
+        self.load_next_token()  # ('void' | type)
+        subroutine_name = self.load_next_token()  # subroutineName
+
+        self.symbol_table.start_subroutine()  # init subroutine table
+        if subroutine_kind == "method":
+            self.symbol_table.define("instance", self.class_name, "ARG")
+
+        self.load_next_token()  # curr_token '('
         self.compile_parameter_list()  # parameterList
-        self.write_next_token()  # ')'
-        self.write_opening_tag("subroutineBody")
-        self.write_next_token()  # '{'
-        self.save_token_if_written()
-        while "var" in self.curr_token:
+        # next_token == ')' when escaped
+        self.load_next_token()  # ')'
+        self.load_next_token()  # '{'
+        while self.check_next_token() == "var":
             self.compile_var_dec()  # varDec*
-            self.save_token_if_written()
+        function_name = "{}.{}".format(self.class_name, subroutine_name)
+        num_locals = self.symbol_table.var_count("VAR")
+        self.vm_writer.write_function(function_name, num_locals)
+        if subroutine_kind == "constructor":
+            num_fields = self.symbol_table.var_count("FIELD")
+            self.vm_writer.write_push("CONST", num_fields)
+            self.vm_writer.write_call("Memory.alloc", 1)
+            self.vm_writer.write_pop("POINTER", 0)
+        elif subroutine_kind == "method":
+            self.vm_writer.write_push("ARG", 0)
+            self.vm_writer.write_pop("POINTER", 0)
         self.compile_statements()  # statements
-        self.write_next_token()  # '}'
-        self.write_closing_tag("subroutineBody")
-        self.write_closing_tag("subroutineDec")
+        self.get_token()  # '}
+
+        # ( (type varName) (',' type varName)*)?
 
     def compile_parameter_list(self):
-        """
-        (type varName (, type varName)*)?
-        """
-        self.write_opening_tag("parameterList")
-        self.save_token_if_written()
-        if ")" not in self.curr_token:
-            self.write_next_token()  # type
-            self.write_next_token()  # varName
-            self.save_token_if_written()
-        while ")" not in self.curr_token:
-            self.write_next_token()  # ','
-            self.write_next_token()  # type
-            self.write_next_token()  # varName
-            self.save_token_if_written()
-        self.write_closing_tag("parameterList")
+        # curr_token == '('
+        if self.check_next_token() != ")":
+            type = self.load_next_token()  # type
+            name = self.load_next_token()  # varName
+            self.symbol_table.define(name, type, "ARG")
+        while self.check_next_token() != ")":
+            self.load_next_token()  # ','
+            type = self.load_next_token()  # type
+            name = self.load_next_token()  # varName
+            self.symbol_table.define(name, type, "ARG")
+        # NOTE param compilation finishes when next_token == ')'
 
-    # NOTE this function is in API, but not used here
-    def compile_subroutine_body(self):
-        """
-        '{' varDec* statements '}'
-        """
-        self.write_opening_tag("subroutineBody")
-        self.write_next_token()  # '{'
-        self.save_token_if_written()
-        while "var" in self.curr_token:
-            self.compile_var_dec()  # varDec*
-            self.save_token_if_written()
-        self.compile_statements()  # statements
-        self.write_next_token()  # '}'
-        self.write_closing_tag("subroutineBody")
+    def is_array(self):
+        return self.check_next_token() == "["
 
-    def compile_var_dec(self):
-        """
-        'var' type varName (',' varName)* ';'
-        """
-        self.write_opening_tag("varDec")
-        self.write_next_token()  # 'var'
-        self.write_next_token()  # type
-        self.write_next_token()  # varName
-        self.compile_multiple(",", "identifier")  # (',' varName)*
-        self.write_next_token()  # ';'
-        self.write_closing_tag("varDec")
-
-    # ANCHOR STATEMENTS
-
-    def compile_statements(self):
-        """`statement*`(zero or more)
-        - letStatement | ifStatement | whileStatement | doStatement | returnStatement
-        """
-        self.write_opening_tag("statements")
-        while self.is_statement():
-            if "let" in self.curr_token:
-                self.compile_let()
-            elif "if" in self.curr_token:
-                self.compile_if()
-            elif "while" in self.curr_token:
-                self.compile_while()
-            elif "do" in self.curr_token:
-                self.compile_do()
-            elif "return" in self.curr_token:
-                self.compile_return()
-            self.save_token_if_written()
-        self.write_closing_tag("statements")
-
-    # ANCHOR SUB-FUNCTIONS FOR STATEMENTS
-    def compile_let(self):
-        """
-        'let' varName ('[' expression ']')? '=' expression ';'
-        """
-        self.write_opening_tag("letStatement")
-        self.write_next_token()  # 'let'
-        self.write_next_token()  # varName
-        self.save_token_if_written()
-        if "[" in self.curr_token:  # ('[' expression ']')?
-            self.write_next_token()  # '['
-            self.compile_expression()  # expression
-            self.write_next_token()  # ']'
-        self.write_next_token()  # '='
-        self.compile_expression()  # expression
-        self.write_next_token()  # ';'
-        self.write_closing_tag("letStatement")
-
-    def compile_if(self):
-        """
-        'if' '(' expression ')' '{' statements '}' ( 'else' '{' statements '}' )?
-        """
-        self.write_opening_tag("ifStatement")
-        self.write_next_token()  # if
-        self.write_next_token()  # '('
-        self.compile_expression()  # expression
-        self.write_next_token()  # ')'
-        self.write_next_token()  # '{'
-        self.compile_statements()  # statements
-        self.write_next_token()  # '}'
-        self.save_token_if_written()
-        if "else" in self.curr_token:  # else?
-            self.write_next_token()  # else
-            self.write_next_token()  # '{'
-            self.compile_statements()  # statements
-            self.write_next_token()  # '}'
-        self.write_closing_tag("ifStatement")
-
-    def compile_while(self):
-        """
-        'while' '(' expression ')' '{' statements '}'
-        """
-        self.write_opening_tag("whileStatement")
-        self.write_next_token()  # 'while'
-        self.write_next_token()  # '('
-        self.compile_expression()  # expression
-        self.write_next_token()  # ')'
-        self.write_next_token()  # '{'
-        self.compile_statements()  # statements
-        self.write_next_token()  # '}'
-        self.write_closing_tag("whileStatement")
-
-    def compile_do(self):
-        self.write_opening_tag("doStatement")
-        self.write_next_token()  # 'do'
-        self.write_next_token()  # (subroutineName | className | varName)
-        self.save_token_if_written()
-        if "." in self.curr_token:
-            self.write_next_token()  # '.'
-            self.write_next_token()  # subroutineName
-        self.write_next_token()  # '('
-        self.compile_expression_list()  # expressionList
-        self.write_next_token()  # ')'
-        self.write_next_token()  # ';'
-        self.write_closing_tag("doStatement")
-
-    def compile_return(self):
-        """
-        'return' expression? ';'
-        """
-        self.write_opening_tag("returnStatement")
-        self.write_next_token()  # 'return'
-        self.save_token_if_written()
-        if ";" not in self.curr_token:  # expression?
-            self.compile_expression()  # expression
-        self.write_next_token()  # ';'
-        self.write_closing_tag("returnStatement")
-
-    # ANCHOR EXPRESSIONS
-
-    def compile_expression(self):
-        """
-        term (op term)*
-        """
-        self.write_opening_tag("expression")
-        self.compile_term()
-        while self.is_op():
-            self.write_next_token()  # op
-            self.compile_term()  # term
-        self.write_closing_tag("expression")
-
-    def compile_term(self):
-        """
-        integerConstant | stringConstant | keywordConstant | varName | varName '[' expression ']' | subroutineCall | '(' expression ')' | unaryOp term
-        """
-        self.write_opening_tag("term")
-        self.save_token_if_written()
-        if self.is_unary_op_term():
-            self.write_next_token()  # unaryOp
-            self.compile_term()  # term
-        elif "(" in self.curr_token:
-            self.write_next_token()  # '('
-            self.compile_expression()  # expression
-            self.write_next_token()  # ')'
-        else:  # first is an identifier
-            self.write_next_token()  # identifier
-            self.save_token_if_written()
-            if "[" in self.curr_token:
-                self.write_next_token()  # '['
-                self.compile_expression()  # expression
-                self.write_next_token()  # ']'
-            elif "." in self.curr_token:
-                self.write_next_token()  # '.'
-                self.write_next_token()  # subroutineName
-                self.write_next_token()  # '('
-                self.compile_expression_list()  # expressionList
-                self.write_next_token()  # ')'
-            elif "(" in self.curr_token:
-                self.write_next_token()  # '('
-                self.compile_expression_list()  # expressionList
-                self.write_next_token()  # ')'
-        self.write_closing_tag("term")
-
-    def compile_expression_list(self):
-        self.write_opening_tag("expressionList")
-        self.save_token_if_written()
-        if ")" not in self.curr_token:
-            self.compile_expression()  # expression
-            self.save_token_if_written()  # for while
-        while ")" not in self.curr_token:
-            self.write_next_token()  # ','
-            self.compile_expression()  # expression
-            self.save_token_if_written()
-        self.write_closing_tag("expressionList")
-
-    #! This is not included in Proposed Instruction
-    def compile_multiple(self, first_identifier, second_identifier):
-        self.save_token_if_written()
-        while (
-            first_identifier in self.curr_token or second_identifier in self.curr_token
-        ):
-            self.write_next_token()
-            self.save_token_if_written()
-
-    # ANCHOR Boolean functions
     def is_class_var_dec(self):
-        self.save_token_if_written()
-        return "static" in self.curr_token or "field" in self.curr_token
+        return self.check_next_token() in ["static", "field"]
 
     def is_subroutine_dec(self):
-        self.save_token_if_written()
-        return (
-            "constructor" in self.curr_token
-            or "function" in self.curr_token
-            or "method" in self.curr_token
-        )
+        return self.check_next_token() in ["constructor", "function", "method"]
 
     def is_statement(self):
-        self.save_token_if_written()
-        return (
-            "let" in self.curr_token
-            or "if" in self.curr_token
-            or "while" in self.curr_token
-            or "do" in self.curr_token
-            or "return" in self.curr_token
-        )
+        return self.check_next_token() in ["let", "if", "while", "do", "return"]
 
     def is_op(self):
-        self.save_token_if_written()
-        return re.search(r"> (\+|-|\*|/|&amp;|\||&lt;|&gt;|=) <", self.curr_token)
+        return self.check_next_token() in ["+", "-", "*", "/", "&", "|", "<", ">", "="]
 
     def is_unary_op_term(self):
-        self.save_token_if_written()
-        return re.search(r"> (-|~) <", self.curr_token)
+        return self.check_next_token() in ["~", "-"]
 
-    # ANCHOR Examine if current token is written or not
-    def save_token_if_written(self):
-        """
-        if curr_token is already written but not yet next token is loaded in curr_token,
-        * Mount next new token to curr_token
-        * Set is_written to False
-        """
-        if self.is_written:
-            self.curr_token = self.txml.readline()
-            self.is_written = False
+    def check_next_token(self):
+        return self.tokenizer.next_token[1]
 
-    # ANCHOR Writing part
+    def check_next_type(self):
+        return self.tokenizer.next_token[0]
 
-    def get_next_token(self):
+    def load_next_token(self):
         if self.tokenizer.has_more_tokens():
-            self.tokenizer.advance()
-
-    def write_next_token(self):
-        if self.is_written:
-            self.curr_token = self.txml.readline()
-        else:
-            self.is_written = True
-        # write current token
-        self.xml.write(f"{self.curr_indent}{self.curr_token}")
+            self.tokenizer.advance()  # curr_token = next_token
+            return self.tokenizer.curr_token[1]

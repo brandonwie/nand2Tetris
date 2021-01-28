@@ -1,14 +1,14 @@
 class VMWriter:
-    def __init__(self, txml_path: str):
+    def __init__(self, file_path: str):
         """Creates a new output .vm file and prepares it for writing
 
         Args:
             txml_path (str): path for .vm file
         """
-        vm_file = txml_path.replace(".jack", ".vm")
+        vm_file = file_path.replace(".jack", ".vm")
         self.vm = open(vm_file, "w")
 
-    def write_push(self, segment: str, index: int):
+    def write_push(self, segment, index):
         """Writes a VM push command
 
         Args:
@@ -22,7 +22,7 @@ class VMWriter:
         else:
             self.vm.write(f"push {segment.lower()} {index}")
 
-    def write_pop(self, segment: str, index: int):
+    def write_pop(self, segment, index):
         """Writes a VM pop command
 
         Args:
@@ -36,7 +36,7 @@ class VMWriter:
         else:
             self.vm.write(f"pop {segment.lower()} {index}")
 
-    def write_arithmetic(self, command: str):
+    def write_arithmetic(self, command):
         """Writes a VM arithmetic-logical command
 
         Args:
@@ -44,23 +44,26 @@ class VMWriter:
         """
         self.vm.write(f"{command.lower()}")
 
-    def write_label(self, label: str):
+    def write_label(self, label):
         self.vm.write(f"label {label}")
 
-    def write_goto(self, label: str):
+    def write_goto(self, label):
         self.vm.write(f"goto {label}")
 
-    def write_if(self, label: str):
+    def write_if(self, label):
         self.vm.write(f"if-goto {label}")
 
-    def write_call(self, name: str, num_args: int):
+    def write_call(self, name, num_args):
         self.vm.write(f"call {name} {num_args}")
 
-    def write_function(self, name: str, num_locals: int):
+    def write_function(self, name, num_locals):
         self.vm.write(f"function {name} {num_locals}")
 
     def write_return(self):
         self.vm.write("return")
+
+    def write_anything(self, any):
+        self.vm.write(any)
 
     def close(self):
         self.vm.close()
