@@ -39,7 +39,7 @@ class JackTokenizer:
         self.jack = open(jack_file_path, "r")  # open Jack file
         self.jack_file = self.jack.read()  # read whole file
         self.tokens = self.tokenize()  # all tokens
-        self.curr_token = None
+        self.curr_token: tuple
         self.next_token = self.tokens.pop(0)  # load first token in next_token
 
     # ANCHOR API
