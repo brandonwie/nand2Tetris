@@ -62,8 +62,8 @@ class VMWriter:
     def write_return(self):
         self.vm.write("return\n")
 
-    def write_anything(self, any):
-        self.vm.write(any)
-
     def close(self):
         self.vm.close()
+
+    def write_any(self, message):
+        self.vm.write(f"--{message}--\n")

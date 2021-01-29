@@ -2,7 +2,7 @@ from symbol_table import SymbolTable
 from jack_tokenizer import JackTokenizer
 from vm_writer import VMWriter
 
-CONVERT_KIND = {"ARG": "ARG", "STATIC": "STATIC", "VAR": "VAR", "FIELD": "THIS"}
+CONVERT_KIND = {"ARG": "ARG", "STATIC": "STATIC", "VAR": "LOCAL", "FIELD": "THIS"}
 
 ARITHMETIC = {
     "+": "ADD",
@@ -28,8 +28,8 @@ class CompilationEngine:
         self.tokenizer = JackTokenizer(jack_file)
         self.symbol_table = SymbolTable()
 
-        self.if_index = 0
-        self.while_index = 0
+        self.if_index = -1
+        self.while_index = -1
 
     # 'class' className '{' classVarDec* subroutineDec* '}'
     def compile_class(self):
@@ -160,12 +160,14 @@ class CompilationEngine:
             self.load_next_token()  # curr_token == ']'
             self.vm_writer.write_push(var_kind, var_index)
             self.vm_writer.write_arithmetic("ADD")
-            self.vm_writer.write_pop("TEMP", 0)
+
             self.load_next_token()  # curr_token == '='
             self.compile_expression()  # expression
             self.load_next_token()  # curr_token == ';'
-            self.vm_writer.write_push("TEMP", 0)
+            #! POP TEMP and PUSH TEMP location changed
+            self.vm_writer.write_pop("TEMP", 0)
             self.vm_writer.write_pop("POINTER", 1)
+            self.vm_writer.write_push("TEMP", 0)
             self.vm_writer.write_pop("THAT", 0)
         else:  # regular assignment
             self.load_next_token()  # curr_token == '='
@@ -176,50 +178,50 @@ class CompilationEngine:
     # 'if' '(' expression ')' '{' statements '}' ( 'else' '{' statements '}' )?
     def compile_if(self):
         # curr_token == if
-        if_index = self.if_index
-        # ? CHECK LATER IF INDEXING IS OKAY
         self.if_index += 1
+        if_index = self.if_index
+        # TODO IF indexes count separately
         self.load_next_token()  # curr_token == '('
         self.compile_expression()  # expression
         self.load_next_token()  # ')'
         self.load_next_token()  # '{'
-        self.vm_writer.write_if(f"IF_TRUE{if_index}\n")
-        self.vm_writer.write_goto(f"IF_FALSE{if_index}\n")
-        self.vm_writer.write_label(f"IF_TRUE{if_index}\n")
-        self.compile_statements()  # statements
-        self.vm_writer.write_goto(f"IF_END{if_index}\n")
+        # S = statement, L = label
+        self.vm_writer.write_if(f"IF_TRUE{if_index}")  #! if-goto L1
+        self.vm_writer.write_goto(f"IF_FALSE{if_index}")  #! goto L2
+        self.vm_writer.write_label(f"IF_TRUE{if_index}")  #! label L1
+        self.compile_statements()  # statements #! executing S1
+        self.vm_writer.write_goto(f"IF_END{if_index}")  #! goto END
         self.load_next_token()  # '}'
-        self.vm_writer.write_label(f"IF_FALSE{if_index}\n")
+        self.vm_writer.write_label(f"IF_FALSE{if_index}")  #! label L2
         if self.check_next_token() == "else":  # ( 'else' '{' statements '}' )?
             self.load_next_token()  # 'else'
             self.load_next_token()  # '{'
-            self.compile_statements()  # statements
+            self.compile_statements()  # statements #! executing S2
             self.load_next_token()  # '}'
-        self.vm_writer.write_label("IF_END{if_index}\n")
+        self.vm_writer.write_label(f"IF_END{if_index}")
 
     # 'while' '(' expression ')' '{' statements '}'
     def compile_while(self):
         # curr_token == while
-        while_index = self.while_index
         self.while_index += 1
-        self.vm_writer.write_label(f"WHILE{while_index}\n")
+        while_index = self.while_index
+        self.vm_writer.write_label(f"WHILE{while_index}")
         self.load_next_token()  # '('
         self.compile_expression()  # expression
         self.vm_writer.write_arithmetic("NOT")  # eval false condition first
         self.load_next_token()  # ')'
         self.load_next_token()  # '{'
-        self.vm_writer.write_if(f"WHILE_END{while_index}\n")
+        self.vm_writer.write_if(f"WHILE_END{while_index}")
         self.compile_statements()  # statements
-        self.vm_writer.write_goto(f"WHILE{while_index}\n")
-        self.vm_writer.write_label(f"WHILE_END{while_index}\n")
+        self.vm_writer.write_goto(f"WHILE{while_index}")
+        self.vm_writer.write_label(f"WHILE_END{while_index}")
         self.load_next_token()  # '}'
 
         # 'do' subroutineCall ';'
 
     def compile_do(self):
         # curr_token == do
-        print("Entering do...")
-        self.load_next_token()  #! to sink with compile_term()
+        self.load_next_token()  #! to sync with compile_term()
         self.compile_subroutine_call()
         self.vm_writer.write_pop("TEMP", 0)
         self.load_next_token()  # ';'
@@ -274,7 +276,6 @@ class CompilationEngine:
         else:
             #! (varName | varName for expression | subroutine)'s base
             var_name = self.load_next_token()  # curr_token = varName | subroutineCall
-            print("varN or subR: " + var_name)
             # (e.g. Screen.setColor | show() )
             #! next_token == '[' | '(' or '.' | just varName
             # varName '[' expression ']'
@@ -312,7 +313,6 @@ class CompilationEngine:
         # NOTE curr_token == subroutineName | className | varName
         subroutine_caller = self.get_curr_token()
         function_name = subroutine_caller
-        print("subroutineCaller: ", subroutine_caller)
         # _next_token()  # FIXME now it loads '.' or '('
         # func_name = identifier
         number_args = 0

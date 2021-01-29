@@ -1,5 +1,4 @@
 import re
-from typing import Iterable, Iterator
 
 # ANCHOR RegEx
 # positive lookahead/lookbehind: no character should found before/after the keyword
@@ -38,8 +37,9 @@ class JackTokenizer:
         """
         self.jack = open(jack_file_path, "r")  # open Jack file
         self.jack_file = self.jack.read()  # read whole file
-        self.tokens = self.tokenize()  # all tokens
+        self.tokens = self.tokenize()  # retreive all tokens
         self.next_token = self.tokens.pop(0)  # load first token in next_token
+        self.jack.close()  # close IO stream
 
     # ANCHOR API
     def has_more_tokens(self):
