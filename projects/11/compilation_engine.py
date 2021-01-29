@@ -29,6 +29,7 @@ class CompilationEngine:
         self.symbol_table = SymbolTable()
 
         self.if_index = 0
+        self.while_index = 0
 
     # 'class' className '{' classVarDec* subroutineDec* '}'
     def compile_class(self):
@@ -38,9 +39,10 @@ class CompilationEngine:
         self.class_name = self.load_next_token()  # className
         self.load_next_token()  # curr_token = '{'
 
-        # if next token == 'static' or 'field',
+        # while next token == 'static' | 'field',
         while self.is_class_var_dec():  # check next token
             self.compile_class_var_dec()  # classVarDec*
+        # while next_token == constructor | function | method
         while self.is_subroutine_dec():
             self.compile_subroutine()  # subroutineDec*
         self.vm_writer.close()
@@ -60,7 +62,6 @@ class CompilationEngine:
 
     # subroutineDec: ('constructor' | 'function' | 'method') ('void' | type) subroutineName '(' parameterList ')' subroutineBody
     # subroutineBody: '{' varDec* statements '}'
-    # TODO
     def compile_subroutine(self):
         subroutine_kind = (
             self.load_next_token()
@@ -174,26 +175,65 @@ class CompilationEngine:
 
     # 'if' '(' expression ')' '{' statements '}' ( 'else' '{' statements '}' )?
     def compile_if(self):
+        # curr_token == if
         if_index = self.if_index
-        #? CHECK LATER IF INDEXING IS OKAY
+        # ? CHECK LATER IF INDEXING IS OKAY
         self.if_index += 1
-        self.load_next_token()  # '('
+        self.load_next_token()  # curr_token == '('
         self.compile_expression()  # expression
         self.load_next_token()  # ')'
         self.load_next_token()  # '{'
-        self.vm_writer.write_if('IF_TRUE{}\n'.format(if_index))
-        self.vm_writer.write_goto('IF_FALSE{}\n'.format(if_index))
-        self.vm_writer.write_label('IF_TRUE{}\n'.format(if_index))
+        self.vm_writer.write_if(f"IF_TRUE{if_index}\n")
+        self.vm_writer.write_goto(f"IF_FALSE{if_index}\n")
+        self.vm_writer.write_label(f"IF_TRUE{if_index}\n")
         self.compile_statements()  # statements
-        self.vm_writer.write_goto('IF_END{}\n'.format(if_index))
+        self.vm_writer.write_goto(f"IF_END{if_index}\n")
         self.load_next_token()  # '}'
-        self.vm_writer.write_label('IF_FALSE{}\n'.format(if_index))
-        if self.peek() == 'else':  # ( 'else' '{' statements '}' )?
+        self.vm_writer.write_label(f"IF_FALSE{if_index}\n")
+        if self.check_next_token() == "else":  # ( 'else' '{' statements '}' )?
             self.load_next_token()  # 'else'
             self.load_next_token()  # '{'
             self.compile_statements()  # statements
             self.load_next_token()  # '}'
-        self.vm_writer.write_label('IF_END{}\n'.format(if_index)
+        self.vm_writer.write_label("IF_END{if_index}\n")
+
+    # 'while' '(' expression ')' '{' statements '}'
+    def compile_while(self):
+        # curr_token == while
+        while_index = self.while_index
+        self.while_index += 1
+        self.vm_writer.write_label(f"WHILE{while_index}\n")
+        self.load_next_token()  # '('
+        self.compile_expression()  # expression
+        self.vm_writer.write_arithmetic("NOT")  # eval false condition first
+        self.load_next_token()  # ')'
+        self.load_next_token()  # '{'
+        self.vm_writer.write_if(f"WHILE_END{while_index}\n")
+        self.compile_statements()  # statements
+        self.vm_writer.write_goto(f"WHILE{while_index}\n")
+        self.vm_writer.write_label(f"WHILE_END{while_index}\n")
+        self.load_next_token()  # '}'
+
+        # 'do' subroutineCall ';'
+
+    def compile_do(self):
+        # curr_token == do
+        print("Entering do...")
+        self.load_next_token()  #! to sink with compile_term()
+        self.compile_subroutine_call()
+        self.vm_writer.write_pop("TEMP", 0)
+        self.load_next_token()  # ';'
+
+        # 'return' expression? ';'
+
+    def compile_return(self):
+        # curr_token == return
+        if self.check_next_token() != ";":
+            self.compile_expression()
+        else:
+            self.vm_writer.write_push("CONST", 0)
+        self.vm_writer.write_return()
+        self.load_next_token()  # ';'
 
     # term (op term)*
     def compile_expression(self):
@@ -234,6 +274,8 @@ class CompilationEngine:
         else:
             #! (varName | varName for expression | subroutine)'s base
             var_name = self.load_next_token()  # curr_token = varName | subroutineCall
+            print("varN or subR: " + var_name)
+            # (e.g. Screen.setColor | show() )
             #! next_token == '[' | '(' or '.' | just varName
             # varName '[' expression ']'
             if self.is_array():  # if next_token == '['
@@ -247,46 +289,56 @@ class CompilationEngine:
                 self.vm_writer.write_pop("POINTER", 1)
                 self.vm_writer.write_push("THAT", 0)
             # if next_token == "(" | "." => curr_token == subroutineCall
+
+            #! if varName is not found, assume class or function name
             elif self.is_subroutine_call():
                 # NOTE curr_token == subroutineName | className | varName
                 self.compile_subroutine_call()
             # varName
             else:
                 # curr_token == varName
+                # FIXME cannot catch subroutine call and pass it to 'else' below
+                # TODO error caught on Math.abs() part on Ball.vm
                 var_kind = CONVERT_KIND[self.symbol_table.kind_of(var_name)]
                 var_index = self.symbol_table.index_of(var_name)
                 self.vm_writer.write_push(var_kind, var_index)
 
     # subroutineCall: subroutineName '(' expressionList ')' |
     # ( className | varName) '.' subroutineName '(' expressionList ')'
+
+    # e.g.) (do) game.run()
+    # ! in case of 'do' order is different from 'let game = Class.new()'
     def compile_subroutine_call(self):
-        # NOTE curr_token == subroutineCall
-        identifier = self.get_curr_token()
-        func_name = identifier
+        # NOTE curr_token == subroutineName | className | varName
+        subroutine_caller = self.get_curr_token()
+        function_name = subroutine_caller
+        print("subroutineCaller: ", subroutine_caller)
+        # _next_token()  # FIXME now it loads '.' or '('
+        # func_name = identifier
         number_args = 0
         #! '.' or '(' 2 cases
         if self.check_next_token() == ".":
             self.load_next_token()  # curr_token == '.'
             subroutine_name = self.load_next_token()  # curr_token == subroutineName
-            type = self.symbol_table.type_of(identifier)
+            type = self.symbol_table.type_of(subroutine_caller)
             if type != "NONE":  # it's an instance
-                kind = self.symbol_table.kind_of(identifier)
-                index = self.symbol_table.index_of(identifier)
+                kind = self.symbol_table.kind_of(subroutine_caller)
+                index = self.symbol_table.index_of(subroutine_caller)
                 self.vm_writer.write_push(CONVERT_KIND[kind], index)
-                func_name = f"{type}.{subroutine_name}"
+                function_name = f"{type}.{subroutine_name}"
                 number_args += 1
             else:  # it's a class
-                class_name = identifier
-                func_name = f"{class_name}.{subroutine_name}"
+                class_name = subroutine_caller
+                function_name = f"{class_name}.{subroutine_name}"
         elif self.check_next_token() == "(":
-            subroutine_name = identifier
-            func_name = f"{self.class_name}.{subroutine_name}"
+            subroutine_name = subroutine_caller
+            function_name = f"{self.class_name}.{subroutine_name}"
             number_args += 1
             self.vm_writer.write_push("POINTER", 0)
         self.load_next_token()  # '('
         number_args += self.compile_expression_list()  # expressionList
         self.load_next_token()  # ')'
-        self.vm_writer.write_call(func_name, number_args)
+        self.vm_writer.write_call(function_name, number_args)
 
     # (expression (',' expression)* )?
     def compile_expression_list(self):
@@ -310,12 +362,12 @@ class CompilationEngine:
 
     def compile_keyword(self):
         keyword = self.load_next_token()  # curr_token == keywordConstant
-        if keyword == 'this':
-            self.vm_writer.write_push('POINTER', 0)
+        if keyword == "this":
+            self.vm_writer.write_push("POINTER", 0)
         else:
-            self.vm_writer.write_push('CONST', 0)
-            if keyword == 'true':
-                self.vm_writer.write_arithmetic('NOT')
+            self.vm_writer.write_push("CONST", 0)
+            if keyword == "true":
+                self.vm_writer.write_arithmetic("NOT")
 
     def is_subroutine_call(self):
         return self.check_next_token() in [".", "("]

@@ -31,7 +31,7 @@ class SymbolTable:
         if name in self.class_scope.keys():
             return self.class_scope[name][1]
         elif name in self.subroutine.keys():
-            return self.subroutine[name][0]
+            return self.subroutine[name][1]
         else:
             return "NONE"
 

@@ -10,7 +10,7 @@ class JackCompiler:
             compiler = CompilationEngine(jack_file)
             compiler.compile_class()
             print(compiler.symbol_table.class_scope)
-            print(compiler.tokenizer.tokens)
+            print(compiler.symbol_table.subroutine)
 
     def parse_argv(self, file_path) -> list:
         if ".jack" in file_path:
