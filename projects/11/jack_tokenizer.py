@@ -39,7 +39,7 @@ class JackTokenizer:
         self.jack_file = self.jack.read()  # read whole file
         self.tokens = self.tokenize()  # retreive all tokens
         self.next_token = self.tokens.pop(0)  # load first token in next_token
-        self.jack.close()  # close IO stream
+        self.jack.close()  # close IO stream once all tokens are extracted
 
     # ANCHOR API
     def has_more_tokens(self):
